@@ -1,4 +1,25 @@
-import { DataType, NameType, TransformSetting } from './constants';
+import { TransformType } from './constants';
+
+export interface FullSchema {
+  transformType: TransformType;
+  exclude?: string[];
+  include?: string[];
+  nestedObjKey?: {
+    [key: string]: DataSchema;
+  };
+  nestedArrayKey?: {
+    [key: string]: DataSchema;
+  };
+}
+
+export type DataSchema = TransformType | FullSchema;
+
+const normalizeSchema = (raw: DataSchema): FullSchema =>
+  typeof raw === 'string'
+    ? {
+        transformType: raw
+      }
+    : raw;
 
 function camelize(str: string) {
   return str
@@ -15,55 +36,56 @@ function pascalize(str: string) {
     .replace(/\s+/g, '');
 }
 
-const getKey = (renameType: NameType, key: string): string => {
-  if (renameType === undefined) {
+const getKey = (transformType: TransformType, key: string): string => {
+  if (transformType === undefined) {
     return key;
   }
-  switch (renameType) {
-    case NameType.Camelcase:
+  switch (transformType) {
+    case TransformType.camelcase:
       return camelize(key);
-    case NameType.Pascalcase:
+    case TransformType.Pascalcase:
       return pascalize(key);
-    case NameType.Remain:
-      return key;
     default:
       return key;
   }
 };
 
-const getValue = (schema: any, value: any): any => {
-  if (schema === undefined || schema.dataType === undefined) {
-    return value;
-  }
+const getValueForObject = (object: any, schema: FullSchema): any =>
+  generateMapper(schema)(object);
 
-  switch (schema.dataType) {
-    case DataType.Object:
-      return generateMapper(schema.schema)(value);
+const getValueForArray = (collections: any[], schema: FullSchema): any =>
+  collections.map(generateMapper(schema));
 
-    case DataType.Array:
-      return value.map(generateMapper(schema.schema));
+export const generateMapper = (dataSchema: DataSchema) => (data: any) => {
+  const {
+    transformType,
+    exclude,
+    include,
+    nestedArrayKey,
+    nestedObjKey
+  } = normalizeSchema(dataSchema);
+  const keys = Object.keys(data);
+  const keysToTransform =
+    exclude !== undefined
+      ? keys.filter(key => exclude.indexOf(key) === -1)
+      : include !== undefined
+        ? keys.filter(key => include.indexOf(key) !== -1)
+        : keys;
+  return keys.reduce((result, key) => {
+    const transformedKey =
+      keysToTransform.indexOf(key) !== -1 ? getKey(transformType, key) : key;
+    const transformedValue =
+      keysToTransform.indexOf(key) === -1
+        ? data[key]
+        : nestedArrayKey !== undefined && nestedArrayKey[key] !== undefined
+          ? getValueForArray(data[key], normalizeSchema(nestedArrayKey[key]))
+          : nestedObjKey !== undefined && nestedObjKey[key] !== undefined
+            ? getValueForObject(data[key], normalizeSchema(nestedObjKey[key]))
+            : data[key];
 
-    default:
-      return value;
-  }
-};
-
-export const generateMapper = (dataSchema: any) => (data: any) =>
-  Object.keys(data).reduce((result, key) => {
-    const keyTransformType =
-      dataSchema[key] !== undefined
-        ? dataSchema[key].rename
-        : dataSchema[TransformSetting.Fallback] !== undefined
-          ? dataSchema[TransformSetting.Fallback].rename
-          : undefined;
-    const valueTransformType =
-      dataSchema[key] !== undefined
-        ? dataSchema[key]
-        : dataSchema[TransformSetting.Fallback];
-    const transformedKey = getKey(keyTransformType, key);
-    const transformedValue = getValue(valueTransformType, data[key]);
     return {
       ...result,
       [transformedKey]: transformedValue
     };
   }, {});
+};

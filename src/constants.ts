@@ -7,8 +7,7 @@ export const enum DataType {
   Object = 'transformDataType/object'
 }
 
-export const enum NameType {
-  Camelcase = 'transformType/camelCase',
-  Pascalcase = 'transformType/pascalCase',
-  Remain = 'transformType/remain'
+export const enum TransformType {
+  camelcase = 'transformType/camelCase',
+  Pascalcase = 'transformType/pascalCase'
 }

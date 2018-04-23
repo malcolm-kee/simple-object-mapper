@@ -1,2 +1,2 @@
-export { TransformSetting, NameType, DataType } from './constants';
-export { generateMapper } from './generateMapper';
+export { TransformType } from './constants';
+export { generateMapper, DataSchema, FullSchema } from './generateMapper';
